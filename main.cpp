@@ -16,8 +16,34 @@
 #include <chrono>
 
 using tflite::StatefulNnApiDelegate;
+
 #define MODEL_PATH "mobilenet_v2_1.0_224_quant.tflite"
-#define NUM_RUNS 100
+#define NUM_RUNS 110 //>= 20 please
+
+double calculateMean(const size_t* data, size_t dataSize) {
+    if (dataSize == 0) {
+        return 0.0; // Handle this case as needed
+    }
+    // Convert size_t to double for arithmetic
+    double sum = 0.0;
+    for (size_t i = 0; i < dataSize; i++) {
+        sum += static_cast<double>(data[i]);
+    }
+    return sum / dataSize;
+}
+
+double calculateStdDev(const size_t* data, size_t dataSize) {
+    if (dataSize < 2) {
+        return 0.0; // Handle this case as needed
+    }
+    double mean = calculateMean(data, dataSize);
+    double sum = 0.0;
+    for (size_t i = 0; i < dataSize; i++) {
+        double diff = static_cast<double>(data[i]) - mean;
+        sum += diff * diff;
+    }
+    return std::sqrt(sum / (dataSize - 1));
+}
 
 int main(void){
   StatefulNnApiDelegate::Options options;
@@ -42,24 +68,36 @@ int main(void){
       return -2;
     }
 
-  uint8_t* input = interpreter->typed_input_tensor<uint8_t>(0);
-  uint8_t* randomData = (uint8_t*) malloc(224*224*3);
-  std::random_device rd;
-  std::uniform_int_distribution<int> dist(0,255);
-  for (unsigned int i = 0; i < 224*224*3; i++){
-    randomData[i] = static_cast<uint8_t>(dist(rd) & 0xFF);
-  }
-  input = randomData;
+  size_t* times = new size_t[NUM_RUNS];
 
-  auto start_time = std::chrono::high_resolution_clock::now();
-  if (interpreter->Invoke() != kTfLiteOk) {
-    std::cerr << "Failed to invoke." << std::endl;
-    return -3;
-  }
-  auto end_time = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-  std::cout << "Time in microseconds " << duration.count() << std::endl;
+  for(int i = 0; i < NUM_RUNS; i++) {
+    uint8_t* input = interpreter->typed_input_tensor<uint8_t>(0);
+    uint8_t* randomData = (uint8_t*) malloc(224*224*3);
+    std::random_device rd;
+    std::uniform_int_distribution<int> dist(0,255);
+    for (unsigned int i = 0; i < 224*224*3; i++){
+      randomData[i] = static_cast<uint8_t>(dist(rd) & 0xFF);
+    }
+    input = randomData;
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+    if (interpreter->Invoke() != kTfLiteOk) {
+      std::cerr << "Failed to invoke." << std::endl;
+      return -3;
+    }
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    times[i] = duration.count();
+    std::cout << "Time in microseconds " << duration.count() << std::endl;
+  }
+// calculate mean/std w/o first 10 data points
+double mean = calculateMean(times + 10, NUM_RUNS-10);
+double stdDev = calculateStdDev(times + 10, NUM_RUNS-10);
+
+std::cout << "Mean: " << mean << " Standard Deviation: " << stdDev << " (microseconds)" << std::endl;
+  
+
+  delete[] times;
   // uint8_t* outputs = interpreter->typed_output_tensor<uint8_t>(0);
   // size_t outputSize = interpreter->output_tensor(0)->dims->data[1];
   // for(int i = 0; i < outputSize; i++) {
