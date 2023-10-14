@@ -1,0 +1,3 @@
+/Users/jacobliu/Documents/junkyard/tpu_run/build/CMakeFiles/demo.dir
+/Users/jacobliu/Documents/junkyard/tpu_run/build/CMakeFiles/edit_cache.dir
+/Users/jacobliu/Documents/junkyard/tpu_run/build/CMakeFiles/rebuild_cache.dir
